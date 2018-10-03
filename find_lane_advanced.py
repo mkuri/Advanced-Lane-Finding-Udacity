@@ -169,6 +169,125 @@ def save_warped_imgs(img_paths, M, cmap=None):
         plt.savefig(fname=filename, dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
 
 
+def window(img, n_windows=9, margin=100, minpix=50, f_img=None):
+    width, height = img.shape[1], img.shape[0]
+    if f_img == True:
+        out_img = np.dstack((img, img, img))*255
+    histogram = np.sum(img[height//2:,:], axis=0)
+    midpoint = np.int(width/2)
+    leftx_base = np.argmax(histogram[:midpoint])
+    rightx_base = np.argmax(histogram[midpoint:]) + midpoint
+
+    window_height = np.int(height/n_windows)
+
+    nonzero = img.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+
+    leftx_current = leftx_base
+    rightx_current = rightx_base
+
+    left_lane_inds = []
+    right_lane_inds = []
+
+    for window in range(n_windows):
+        win_y_low = height - (window+1)*window_height
+        win_y_high = height - window*window_height
+        win_xleft_low = leftx_current - margin
+        win_xleft_high = leftx_current + margin
+        win_xright_low = rightx_current - margin
+        win_xright_high = rightx_current + margin
+
+        if f_img == True:
+            cv2.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),
+                    (0,255,0), 2) 
+            cv2.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),
+                    (0,255,0), 2) 
+    
+        good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & 
+        (nonzerox >= win_xleft_low) &  (nonzerox < win_xleft_high)).nonzero()[0]
+        good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & 
+        (nonzerox >= win_xright_low) &  (nonzerox < win_xright_high)).nonzero()[0]
+
+        left_lane_inds.append(good_left_inds)
+        right_lane_inds.append(good_right_inds)
+
+        if len(good_left_inds) > minpix:
+            leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+        if len(good_right_inds) > minpix:        
+            rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+
+    left_lane_inds = np.concatenate(left_lane_inds)
+    right_lane_inds = np.concatenate(right_lane_inds)
+
+    leftx = nonzerox[left_lane_inds]
+    lefty = nonzeroy[left_lane_inds] 
+    rightx = nonzerox[right_lane_inds]
+    righty = nonzeroy[right_lane_inds]
+
+    ym_per_pix = 30/720 # meters per pixel in y dimension
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension
+    
+    left_fit = np.polyfit(lefty, leftx, 2)
+    right_fit = np.polyfit(righty, rightx, 2)    
+    left_fit_real = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
+    right_fit_real = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)  
+
+    if f_img == True:
+        ploty = np.linspace(0, height-1, height)
+        left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+        right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+
+        out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
+        out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.imshow(out_img)
+        ax.plot(left_fitx, ploty, color='yellow')
+        ax.plot(right_fitx, ploty, color='yellow')
+
+        return(left_fit, right_fit, left_fit_real, right_fit_real, fig)
+    
+    return (left_fit, right_fit, left_fit_real, right_fit_real)
+
+def save_window_imgs(img_paths, M, n_windows=9, margin=100, minpix=50):
+    font = {'family': 'IPAexGothic',
+            'color': 'black',
+            'weight': 'normal',
+            'size': 10,
+            }
+
+    for path in img_paths:
+        img = cv2.imread(str(path))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        width, height = img.shape[1], img.shape[0]
+
+        binary = generate_binary(img)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.imshow(binary, cmap='gray')
+        filename = './output_images/binary/' + path.stem + '_binarized.jpg'
+        plt.savefig(fname=filename, dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
+
+        warped = cv2.warpPerspective(binary, M, (width, height))
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.imshow(warped, cmap='gray')
+        filename = './output_images/warped/' + path.stem + '_warped.jpg'
+        plt.savefig(fname=filename, dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
+
+        left_fit, right_fit, left_fit_real, right_fit_real, fig = window(warped, f_img=True)
+
+        filename = './output_images/window/' + path.stem + '_window.jpg'
+        plt.savefig(fname=filename, dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
+        plt.close(fig)
+
+
 def pipeline(img, M):
     width, height = img.shape[1], img.shape[0]
 
@@ -183,10 +302,14 @@ def main():
 
     # save_binary_imgs(Path('./').glob('test_imgs/*.jpg'))
 
-    img = cv2.imread('./test_images/test1.jpg')
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    M = get_transformation_matrix(img)
-    save_warped_imgs(Path('./').glob('test_images/*.jpg'), M)
+    # img = cv2.imread('./test_images/test1.jpg')
+    # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    # M = get_transformation_matrix(img)
+    # save_warped_imgs(Path('./').glob('test_images/*.jpg'), M)
+
+    with open('./M.p', 'rb') as f:
+        M = pickle.load(f)
+    save_window_imgs(Path('./').glob('test_images/*.jpg'), M)
 
 
 
