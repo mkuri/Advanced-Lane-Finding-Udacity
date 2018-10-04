@@ -2,11 +2,13 @@
 
 from pathlib import Path
 import pickle
+import functools
 
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import skimage.io
+from moviepy.editor import VideoFileClip
 
 import detect_edge
 
@@ -251,6 +253,7 @@ def window(img, n_windows=9, margin=100, minpix=50, f_img=None):
     
     return (left_fit, right_fit, left_fit_real, right_fit_real)
 
+
 def save_window_imgs(img_paths, M, n_windows=9, margin=100, minpix=50):
     font = {'family': 'IPAexGothic',
             'color': 'black',
@@ -288,12 +291,132 @@ def save_window_imgs(img_paths, M, n_windows=9, margin=100, minpix=50):
         plt.close(fig)
 
 
-def pipeline(img, M):
+def margin_fit(img, left_fit, right_fit, margin=100):
+    nonzero = img.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+
+    left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + 
+    left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + 
+    left_fit[1]*nonzeroy + left_fit[2] + margin))) 
+
+    right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + 
+    right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + 
+    right_fit[1]*nonzeroy + right_fit[2] + margin)))  
+
+    # Again, extract left and right line pixel positions
+    leftx = nonzerox[left_lane_inds]
+    lefty = nonzeroy[left_lane_inds] 
+    rightx = nonzerox[right_lane_inds]
+    righty = nonzeroy[right_lane_inds]
+    # Fit a second order polynomial to each
+    ym_per_pix = 30/720 # meters per pixel in y dimension
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension    
+    left_fit = np.polyfit(lefty, leftx, 2)
+    right_fit = np.polyfit(righty, rightx, 2)    
+    left_fit_real = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
+    right_fit_real = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)    
+    
+    return (left_fit, right_fit, left_fit_real, right_fit_real)
+
+
+def measure_the_curvature(height, fit_real):
+    ym_per_pix = 30/720 # meters per pixel in y dimension
+    y_eval = height - 1
+    curverad = ((1 + (2*fit_real[0]*y_eval*ym_per_pix + fit_real[1])**2)**1.5) / np.absolute(2*fit_real[0])
+
+    return curverad
+
+
+def measure_offset_from_center(width, height, left_fit_real, right_fit_real):
+    xm_per_pix = 3.7/700
+    ym_per_pix = 30/720 # meters per pixel in y dimension
+    centerx = (width / 2) * xm_per_pix
+    y_eval = height - 1
+    leftx = left_fit_real[0]*y_eval*ym_per_pix**2 + left_fit_real[1]*y_eval*ym_per_pix + left_fit_real[2]
+    rightx = right_fit_real[0]*y_eval*ym_per_pix**2 + right_fit_real[1]*y_eval*ym_per_pix + right_fit_real[2]
+
+    return ((leftx + rightx) / 2) - centerx
+
+
+def draw_road_area(img, warped, M, left_fit, right_fit):
+    ploty = np.linspace(0, warped.shape[0]-1, warped.shape[0] )
+    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+    
+    # Create an image to draw the lines on
+    warp_zero = np.zeros_like(warped).astype(np.uint8)
+    color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+
+    # Recast the x and y points into usable format for cv2.fillPoly()
+    pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+    pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+    pts = np.hstack((pts_left, pts_right))
+
+    # Draw the lane onto the warped blank image
+    cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
+
+    Minv = np.linalg.inv(M)
+
+    # Warp the blank back to original image space using inverse perspective matrix (Minv)
+    newwarp = cv2.warpPerspective(color_warp, Minv, (img.shape[1], img.shape[0])) 
+    # Combine the result with the original image
+    result = cv2.addWeighted(img, 1, newwarp, 0.3, 0)
+    
+    return result
+ 
+
+class Line():
+    def __init__(self):
+        # was the line detected in the last iteration?
+        self.detected = False  
+        # x values of the last n fits of the line
+        self.recent_xfitted = [] 
+        #average x values of the fitted line over the last n iterations
+        self.bestx = None     
+        #polynomial coefficients averaged over the last n iterations
+        self.best_fit = None  
+        #polynomial coefficients for the most recent fit
+        self.current_fit = [np.array([False])]  
+        #radius of curvature of the line in some units
+        self.radius_of_curvature = None 
+        #distance in meters of vehicle center from the line
+        self.line_base_pos = None 
+        #difference in fit coefficients between last and new fits
+        self.diffs = np.array([0,0,0], dtype='float') 
+        #x values for detected line pixels
+        self.allx = None  
+        #y values for detected line pixels
+        self.ally = None  
+
+
+def pipeline(img, mtx, dist, M, left_line, right_line, n_windows=9, margin=100, minpix=50):
     width, height = img.shape[1], img.shape[0]
 
-    binary = generate_binary(img)
+    undist = cv2.undistort(img, mtx, dist, None, mtx)
+    binary = generate_binary(undist)
     warped = cv2.warpPerspective(binary, M, (width, height))
+
+    if left_line.detected == False or right_line.detected == False:
+        left_line.current_fit, right_line.current_fit, left_fit_real, right_fit_real = window(warped)
+        left_line.detected = True
+        right_line.detected = True
+    else:
+        left_line.current_fit, right_line.current_fit, left_fit_real, right_fit_real = margin_fit(warped, left_line.current_fit, right_line.current_fit)
+        
+    left_curverad = measure_the_curvature(height, left_fit_real)
+    right_curverad = measure_the_curvature(height, right_fit_real)
+
+    offset = measure_offset_from_center(width, height, left_fit_real, right_fit_real)
+        
+    output = draw_road_area(img, warped, M, left_line.current_fit, right_line.current_fit)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    text_curvature = 'Radius of curvature: {:.1f}'.format(np.average([left_curverad, right_curverad]))
+    text_offset = 'Offset: {:.1f}'.format(offset)
+    output = cv2.putText(output, text_curvature, (10, 40), font, 1.4, (255, 255, 255), 2, cv2.LINE_AA)
+    output = cv2.putText(output, text_offset, (10, 100), font, 1.4, (255, 255, 255), 2, cv2.LINE_AA)
     
+    return output
 
 
 def main():
@@ -307,10 +430,29 @@ def main():
     # M = get_transformation_matrix(img)
     # save_warped_imgs(Path('./').glob('test_images/*.jpg'), M)
 
+    # with open('./M.p', 'rb') as f:
+    #     M = pickle.load(f)
+    # save_window_imgs(Path('./').glob('test_images/*.jpg'), M)
+
+    output = 'project_video_lane_found.mp4'
+    clip = VideoFileClip('./project_video.mp4')
+
+    with open('./cam_calib_parameters.p', 'rb') as f:
+        cam_calib_parameters = pickle.load(f)
     with open('./M.p', 'rb') as f:
         M = pickle.load(f)
-    save_window_imgs(Path('./').glob('test_images/*.jpg'), M)
+    left_line = Line()
+    right_line = Line()
 
+    pipeline1 = functools.partial(pipeline,
+            mtx=cam_calib_parameters['mtx'],
+            dist=cam_calib_parameters['dist'],
+            M=M,
+            left_line=left_line,
+            right_line=right_line)
+
+    output_clip = clip.fl_image(pipeline1)
+    output_clip.write_videofile(output, audio=False)
 
 
 
