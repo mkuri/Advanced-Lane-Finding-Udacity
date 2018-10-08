@@ -23,9 +23,11 @@ The goals / steps of this project are the following:
 [image6]: ./examples/example_output.jpg "Output"
 [video1]: ./project_video.mp4 "Video"
 [undist]: ./figures/undistorted/calibration1_undistorted.jpg "Undistorted"
+[undist_test]: ./figures/undistorted/straight_lines1_undistorted.jpg "Undistorted test"
 [binary]: ./figures/binary_images/test1_binarized.jpg "Binarized"
 [warped]: ./figures/warped_images/test1_warped.jpg "Warped"
 [lane]: ./output_images/window/test2_window.jpg "Found lanes"
+[pipelined]: ./figures/pipelined/pipelined.png "Pipelined"
 
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
@@ -57,7 +59,7 @@ I then used the output `objpoints` and `imgpoints` to compute the camera calibra
 #### 1. Provide an example of a distortion-corrected image.
 
 To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
-![alt text][image2]
+![Undistorted test][undist_test]
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
@@ -123,7 +125,7 @@ The code for calculating th radius of curvature of the lane is implemented as th
 
 Here is an example of my result on a test image:
 
-![alt text][image6]
+![Pipelined][pipelined]
 
 ---
 

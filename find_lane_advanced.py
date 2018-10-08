@@ -54,6 +54,7 @@ def save_undist_imgs(img_paths, cam_calib_parameters):
 
     for path in img_paths:
         img = cv2.imread(str(path))
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         undist = cv2.undistort(img, mtx, dist, None, mtx)
         cv2.imwrite('./output_images/camera_cal_undist/' + path.stem + '_undisttorted.jpg', undist)
 
@@ -431,8 +432,9 @@ def pipeline(img, mtx, dist, M, left_line, right_line, n_windows=9, margin=100, 
 def main():
     # cam_calib_parameters = calibrate_camera(Path('./').glob('camera_cal/*.jpg'))
     # with open('./cam_calib_parameters.p', 'rb') as f:
-    #     cam_calib_parameters = pickle.load(f)
+        # cam_calib_parameters = pickle.load(f)
     # save_undist_imgs(Path('./').glob('camera_cal/*.jpg'), cam_calib_parameters)
+    # save_undist_imgs(Path('./').glob('test_images/*.jpg'), cam_calib_parameters)
 
     # save_binary_imgs(Path('./').glob('test_imgs/*.jpg'))
 
