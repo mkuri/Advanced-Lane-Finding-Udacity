@@ -11,6 +11,7 @@ import skimage.io
 from moviepy.editor import VideoFileClip
 
 import detect_edge
+import mlhelper.visualize
 
 
 def calibrate_camera(img_paths):
@@ -54,7 +55,15 @@ def save_undist_imgs(img_paths, cam_calib_parameters):
     for path in img_paths:
         img = cv2.imread(str(path))
         undist = cv2.undistort(img, mtx, dist, None, mtx)
-        cv2.imwrite('./camera_cal_undist/' + path.stem + '_undisttorted.jpg', undist)
+        cv2.imwrite('./output_images/camera_cal_undist/' + path.stem + '_undisttorted.jpg', undist)
+
+        fig = mlhelper.visualize.combine_in_one_img(
+                [img, undist],
+                ['Original', 'Undistorted'],
+                [None, None],
+                '12')
+        filename = './figures/undistorted/' + path.stem + '_undistorted.jpg'
+        fig.savefig(filename, dpi=300, transparent=True, bbox_inches='tight', pad_inches=0)
 
 
 def generate_binary(img):
@@ -421,6 +430,8 @@ def pipeline(img, mtx, dist, M, left_line, right_line, n_windows=9, margin=100, 
 
 def main():
     # cam_calib_parameters = calibrate_camera(Path('./').glob('camera_cal/*.jpg'))
+    # with open('./cam_calib_parameters.p', 'rb') as f:
+    #     cam_calib_parameters = pickle.load(f)
     # save_undist_imgs(Path('./').glob('camera_cal/*.jpg'), cam_calib_parameters)
 
     # save_binary_imgs(Path('./').glob('test_imgs/*.jpg'))
@@ -434,26 +445,25 @@ def main():
     #     M = pickle.load(f)
     # save_window_imgs(Path('./').glob('test_images/*.jpg'), M)
 
-    output = 'project_video_lane_found.mp4'
-    clip = VideoFileClip('./project_video.mp4')
-
-    with open('./cam_calib_parameters.p', 'rb') as f:
-        cam_calib_parameters = pickle.load(f)
-    with open('./M.p', 'rb') as f:
-        M = pickle.load(f)
-    left_line = Line()
-    right_line = Line()
-
-    pipeline1 = functools.partial(pipeline,
-            mtx=cam_calib_parameters['mtx'],
-            dist=cam_calib_parameters['dist'],
-            M=M,
-            left_line=left_line,
-            right_line=right_line)
-
-    output_clip = clip.fl_image(pipeline1)
-    output_clip.write_videofile(output, audio=False)
-
+    # output = 'project_video_lane_found.mp4'
+    # clip = VideoFileClip('./project_video.mp4')
+    #
+    # with open('./cam_calib_parameters.p', 'rb') as f:
+    #     cam_calib_parameters = pickle.load(f)
+    # with open('./M.p', 'rb') as f:
+    #     M = pickle.load(f)
+    # left_line = Line()
+    # right_line = Line()
+    #
+    # pipeline1 = functools.partial(pipeline,
+    #         mtx=cam_calib_parameters['mtx'],
+    #         dist=cam_calib_parameters['dist'],
+    #         M=M,
+    #         left_line=left_line,
+    #         right_line=right_line)
+    #
+    # output_clip = clip.fl_image(pipeline1)
+    # output_clip.write_videofile(output, audio=False)
 
 
 if __name__ == '__main__':
