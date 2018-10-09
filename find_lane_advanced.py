@@ -447,25 +447,25 @@ def main():
     #     M = pickle.load(f)
     # save_window_imgs(Path('./').glob('test_images/*.jpg'), M)
 
-    # output = 'project_video_lane_found.mp4'
-    # clip = VideoFileClip('./project_video.mp4')
-    #
-    # with open('./cam_calib_parameters.p', 'rb') as f:
-    #     cam_calib_parameters = pickle.load(f)
-    # with open('./M.p', 'rb') as f:
-    #     M = pickle.load(f)
-    # left_line = Line()
-    # right_line = Line()
-    #
-    # pipeline1 = functools.partial(pipeline,
-    #         mtx=cam_calib_parameters['mtx'],
-    #         dist=cam_calib_parameters['dist'],
-    #         M=M,
-    #         left_line=left_line,
-    #         right_line=right_line)
-    #
-    # output_clip = clip.fl_image(pipeline1)
-    # output_clip.write_videofile(output, audio=False)
+    output = 'project_video_lane_found.mp4'
+    clip = VideoFileClip('./project_video.mp4')
+    
+    with open('./cam_calib_parameters.p', 'rb') as f:
+        cam_calib_parameters = pickle.load(f)
+    with open('./M.p', 'rb') as f:
+        M = pickle.load(f)
+    left_line = Line()
+    right_line = Line()
+    
+    pipeline1 = functools.partial(pipeline,
+            mtx=cam_calib_parameters['mtx'],
+            dist=cam_calib_parameters['dist'],
+            M=M,
+            left_line=left_line,
+            right_line=right_line)
+    
+    output_clip = clip.fl_image(pipeline1)
+    output_clip.write_videofile(output, audio=False)
 
 
 if __name__ == '__main__':
