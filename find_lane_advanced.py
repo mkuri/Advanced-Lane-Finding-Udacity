@@ -343,8 +343,8 @@ def measure_offset_from_center(width, height, left_fit_real, right_fit_real):
     ym_per_pix = 30/720 # meters per pixel in y dimension
     centerx = (width / 2) * xm_per_pix
     y_eval = height - 1
-    leftx = left_fit_real[0]*y_eval*ym_per_pix**2 + left_fit_real[1]*y_eval*ym_per_pix + left_fit_real[2]
-    rightx = right_fit_real[0]*y_eval*ym_per_pix**2 + right_fit_real[1]*y_eval*ym_per_pix + right_fit_real[2]
+    leftx = left_fit_real[0]*(y_eval*ym_per_pix)**2 + left_fit_real[1]*y_eval*ym_per_pix + left_fit_real[2]
+    rightx = right_fit_real[0]*(y_eval*ym_per_pix)**2 + right_fit_real[1]*y_eval*ym_per_pix + right_fit_real[2]
 
     return ((leftx + rightx) / 2) - centerx
 
