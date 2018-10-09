@@ -419,7 +419,7 @@ def pipeline(img, mtx, dist, M, left_line, right_line, n_windows=9, margin=100, 
 
     offset = measure_offset_from_center(width, height, left_fit_real, right_fit_real)
         
-    output = draw_road_area(img, warped, M, left_line.current_fit, right_line.current_fit)
+    output = draw_road_area(undist, warped, M, left_line.current_fit, right_line.current_fit)
     font = cv2.FONT_HERSHEY_SIMPLEX
     text_curvature = 'Radius of curvature: {:.1f}'.format(np.average([left_curverad, right_curverad]))
     text_offset = 'Offset: {:.1f}'.format(offset)
